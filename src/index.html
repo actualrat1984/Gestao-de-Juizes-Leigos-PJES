@@ -3,7 +3,6 @@
 <head>
   <meta charset="utf-8">
   <base target="_top">
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <?!= include_('Styles'); ?>
 </head>
 <body>
@@ -13,8 +12,9 @@
       <div class="brand-mark">PJES</div>
       <p class="eyebrow">Poder Judiciário do Espírito Santo</p>
       <h1><?= appName ?></h1>
-      <p>Acesso restrito a contas institucionais autorizadas.</p>
-      <div id="googleButton" class="google-button"></div>
+      <p>Acesso restrito às contas institucionais do Google Workspace do TJES.</p>
+      <p>O sistema identificará automaticamente a conta com a qual você está conectado.</p>
+      <button type="button" class="secondary" onclick="boot()">Tentar novamente</button>
       <p id="loginError" class="error" role="alert"></p>
     </section>
   </main>
