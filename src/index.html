@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <base target="_top">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <?!= include_('Styles'); ?>
+</head>
+<body>
+  <div id="loading" class="loading">Carregando…</div>
+  <main id="login" class="login-shell" hidden>
+    <section class="login-card">
+      <div class="brand-mark">PJES</div>
+      <p class="eyebrow">Poder Judiciário do Espírito Santo</p>
+      <h1><?= appName ?></h1>
+      <p>Acesso restrito a contas institucionais autorizadas.</p>
+      <div id="googleButton" class="google-button"></div>
+      <p id="loginError" class="error" role="alert"></p>
+    </section>
+  </main>
+
+  <div id="app" hidden>
+    <header class="topbar">
+      <div><strong>PJES</strong><span>Gestão de Juízes Leigos</span></div>
+      <div class="user-area"><span id="userName"></span><span id="userRole" class="role"></span><button class="link-button" onclick="logout()">Sair</button></div>
+    </header>
+    <main class="container">
+      <section class="hero"><div><p class="eyebrow">Painel institucional</p><h1>Solicitações e disponibilidade</h1><p id="scopeText"></p></div><button class="secondary" onclick="loadData()">Atualizar</button></section>
+      <section id="metrics" class="metrics"></section>
+      <nav class="tabs" aria-label="Seções">
+        <button class="tab active" data-tab="requests">Solicitações</button>
+        <button class="tab" data-tab="judges">Juízes disponíveis</button>
+      </nav>
+      <section id="requestsPanel">
+        <div class="toolbar"><input id="search" type="search" placeholder="Buscar por unidade, solicitante, juiz ou status"><select id="statusFilter"><option value="">Todos os status</option></select></div>
+        <div id="requests" class="cards"></div>
+      </section>
+      <section id="judgesPanel" hidden><div id="judges" class="cards"></div></section>
+    </main>
+  </div>
+
+  <dialog id="editDialog">
+    <form method="dialog" id="editForm">
+      <div class="dialog-head"><h2>Gerenciar solicitação</h2><button value="cancel" class="icon-button" aria-label="Fechar">×</button></div>
+      <input type="hidden" id="editId">
+      <label>Juíza ou juiz leigo<select id="editJudge"><option value="">Selecione</option></select></label>
+      <button type="button" class="secondary" id="assignButton">Designar selecionado</button>
+      <label>Status<select id="editStatus"></select></label>
+      <label>Observações<textarea id="editNotes" rows="5" maxlength="4000"></textarea></label>
+      <div class="dialog-actions"><button value="cancel" class="secondary">Cancelar</button><button type="button" id="saveButton">Salvar atualização</button></div>
+      <p id="editError" class="error" role="alert"></p>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <?!= include_('App'); ?>
+</body>
+</html>
