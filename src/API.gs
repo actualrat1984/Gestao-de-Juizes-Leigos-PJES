@@ -80,6 +80,14 @@ function verificarConfiguracao_() {
   return "Configuração válida. Aba encontrada: " + aba.getName() + ".";
 }
 
+// Comandos públicos apenas para manutenção manual no editor. A verificação
+// administrativa impede que sejam usados por usuários de consulta.
+function verificarConfiguracao() {
+  const usuario = identidadeWorkspace_();
+  if (!podeAdministrar_(usuario)) throw new Error("Somente um administrador pode verificar a configuração.");
+  return verificarConfiguracao_();
+}
+
 function garantirCabecalhos_(aba, cabecalhos) {
   if (aba.getMaxColumns() < cabecalhos.length) aba.insertColumnsAfter(aba.getMaxColumns(), cabecalhos.length - aba.getMaxColumns());
   aba.getRange(1, 1, 1, cabecalhos.length).setValues([cabecalhos]);
@@ -105,4 +113,10 @@ function instalarEstruturasAuxiliares_() {
   auditoria.autoResizeColumns(1, 7);
   gestao.autoResizeColumns(1, JL_CONFIG.MANAGEMENT_HEADERS.length);
   return "Estruturas instaladas: USUARIOS, AUDITORIA e GESTAO_SOLICITACOES.";
+}
+
+function instalarEstruturasAuxiliares() {
+  const usuario = identidadeWorkspace_();
+  if (!podeAdministrar_(usuario)) throw new Error("Somente um administrador pode instalar as estruturas auxiliares.");
+  return instalarEstruturasAuxiliares_();
 }

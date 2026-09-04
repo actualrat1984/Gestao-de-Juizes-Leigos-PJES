@@ -77,6 +77,9 @@ assert.match(indexHtml, /Designar juiz e iniciar atendimento/);
 assert.match(appHtml, /exportRequests/);
 assert.match(appHtml, /apiHistoricoSolicitacao/);
 assert.match(appHtml, /apiSalvarUsuario/);
+const apiCode = fs.readFileSync('src/API.gs', 'utf8');
+assert.match(apiCode, /function instalarEstruturasAuxiliares\(\)/);
+assert.match(apiCode, /function verificarConfiguracao\(\)/);
 
 const appScript = appHtml.replace(/^<script>\s*/, '').replace(/\s*<\/script>\s*$/, '');
 assert.doesNotThrow(() => new Function(appScript));

@@ -64,8 +64,9 @@ clasp push
 
 No editor do Apps Script:
 
-1. Execute `instalarEstruturasAuxiliares_()` e autorize as permissões solicitadas.
-2. Execute `verificarConfiguracao_()` e confirme a mensagem de sucesso.
+1. Configure primeiro `ALLOWED_EMAILS` e `ADMIN_EMAILS` nas propriedades do script.
+2. No menu de funções do editor, execute `instalarEstruturasAuxiliares()` e autorize as permissões solicitadas.
+3. Execute `verificarConfiguracao()` e confirme a mensagem de sucesso.
 3. Acesse **Implantar → Gerenciar implantações → Editar**.
 4. Escolha **Nova versão** e clique em **Implantar**.
 5. Use a URL terminada em `/exec`.
