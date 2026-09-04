@@ -1,16 +1,9 @@
 function apiConfiguracaoPublica() {
-  // A página precisa conseguir carregar mesmo antes de o administrador
-  // cadastrar o OAuth Client ID, para mostrar uma mensagem de configuração
-  // clara em vez de ficar presa em “Carregando”. A validação obrigatória
-  // continua ocorrendo em validarIdTokenGoogle_() no momento do login.
-  const oauthClientId = String(
-    PropertiesService.getScriptProperties().getProperty(JL_CONFIG.PROPERTIES.OAUTH_CLIENT_ID) || ""
-  ).trim();
-  return { nome: JL_CONFIG.APP_NAME, oauthClientId: oauthClientId, dominio: dominioInstitucional_() };
+  return { nome: JL_CONFIG.APP_NAME, dominio: dominioInstitucional_(), autenticacao: "WORKSPACE" };
 }
 
-function apiLogin(credential) {
-  return criarSessao_(validarIdTokenGoogle_(credential));
+function apiLogin() {
+  return criarSessao_(identidadeWorkspace_());
 }
 
 function apiLogout(token) {
@@ -49,7 +42,6 @@ function apiAtualizarSolicitacao(token, numeroLinha, status, observacoes) {
 function verificarConfiguracao_() {
   const aba = obterFonte_();
   mapaCabecalhos_(aba);
-  clienteOAuth_();
   return "Configuração válida. Aba encontrada: " + aba.getName() + ".";
 }
 
