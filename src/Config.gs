@@ -6,16 +6,21 @@ var JL_CONFIG = Object.freeze({
   SOURCE_SHEET: "Respostas ao formulário 1",
   USERS_SHEET: "USUARIOS",
   AUDIT_SHEET: "AUDITORIA",
+  MANAGEMENT_SHEET: "GESTAO_SOLICITACOES",
   SESSION_SECONDS: 21600,
   PROPERTIES: Object.freeze({
     SPREADSHEET_ID: "SPREADSHEET_ID",
     ALLOWED_EMAILS: "ALLOWED_EMAILS",
     ADMIN_EMAILS: "ADMIN_EMAILS",
+    SEND_NOTIFICATIONS: "SEND_NOTIFICATIONS",
     DOMAIN: "INSTITUTIONAL_DOMAIN"
   }),
   DEFAULT_DOMAIN: "tjes.jus.br",
   ROLES: Object.freeze({ VIEWER: "CONSULTA", MANAGER: "GESTOR", ADMIN: "ADMIN" }),
   STATUS: Object.freeze(["Pendente", "Em atendimento", "Concluído", "Cancelado"]),
+  PRIORITIES: Object.freeze(["Normal", "Alta", "Urgente"]),
+  USER_HEADERS: Object.freeze(["EMAIL", "NOME", "PERFIL", "ATIVO", "ULTIMO_ACESSO"]),
+  MANAGEMENT_HEADERS: Object.freeze(["LINHA_ORIGEM", "PRIORIDADE", "PRAZO", "ATUALIZADO_EM", "ATUALIZADO_POR"]),
   HEADERS: Object.freeze({
     TIMESTAMP: "Carimbo de data/hora",
     EMAIL: "Endereço de e-mail",

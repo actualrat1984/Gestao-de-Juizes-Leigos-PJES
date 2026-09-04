@@ -2,15 +2,44 @@ function normalizarEmail_(valor) {
   return String(valor || "").trim().toLowerCase();
 }
 
-function emailsPermitidos_() {
-  return propriedadeObrigatoria_(JL_CONFIG.PROPERTIES.ALLOWED_EMAILS)
+function listaEmailsPropriedade_(nome) {
+  return String(PropertiesService.getScriptProperties().getProperty(nome) || "")
     .split(/[;,\n]+/).map(normalizarEmail_).filter(Boolean);
 }
 
-// Em um Web App do Apps Script, a identidade institucional deve vir da
-// sessão do Google Workspace. Isso evita o GIS dentro do iframe sandbox do
-// HtmlService, cuja origem compartilhada não pode ser cadastrada como origem
-// OAuth JavaScript.
+function emailsPermitidos_() {
+  return listaEmailsPropriedade_(JL_CONFIG.PROPERTIES.ALLOWED_EMAILS);
+}
+
+function emailsAdministradores_() {
+  return listaEmailsPropriedade_(JL_CONFIG.PROPERTIES.ADMIN_EMAILS);
+}
+
+function valorAtivo_(valor) {
+  return ["TRUE", "VERDADEIRO", "SIM", "1"].includes(String(valor || "").trim().toUpperCase());
+}
+
+function registroUsuario_(email) {
+  const aba = abrirPlanilha_().getSheetByName(JL_CONFIG.USERS_SHEET);
+  if (!aba || aba.getLastRow() < 2) return null;
+  const linhas = aba.getRange(2, 1, aba.getLastRow() - 1, JL_CONFIG.USER_HEADERS.length).getDisplayValues();
+  for (let indice = 0; indice < linhas.length; indice++) {
+    if (normalizarEmail_(linhas[indice][0]) === normalizarEmail_(email)) {
+      return { linha: indice + 2, valores: linhas[indice] };
+    }
+  }
+  return null;
+}
+
+function emailAutorizado_(email) {
+  const normalizado = normalizarEmail_(email);
+  if (emailsPermitidos_().includes(normalizado) || emailsAdministradores_().includes(normalizado)) return true;
+  const registro = registroUsuario_(normalizado);
+  return Boolean(registro && valorAtivo_(registro.valores[3]));
+}
+
+// A identidade vem da sessão do Google Workspace. A implantação continua
+// restrita ao domínio e a aplicação aplica uma segunda camada de autorização.
 function identidadeWorkspace_() {
   let email = "";
   try {
@@ -20,18 +49,17 @@ function identidadeWorkspace_() {
   }
   const dominio = dominioInstitucional_();
   if (!email) {
-    throw new Error(
-      "Não foi possível identificar sua conta Google. Implante o Web App como uma conta @" +
-      dominio + " e escolha acesso somente para usuários do domínio."
-    );
+    throw new Error("Não foi possível identificar sua conta Google. Use a conta institucional e confira as permissões do navegador.");
   }
   if (!email.endsWith("@" + dominio)) {
     throw new Error("Use exclusivamente sua conta institucional @" + dominio + ".");
   }
-  if (!emailsPermitidos_().includes(email)) {
+  if (!emailAutorizado_(email)) {
     throw new Error("Sua conta institucional não está autorizada a acessar este sistema.");
   }
-  return { email: email, nome: email.split("@")[0] };
+  const registro = registroUsuario_(email);
+  const nome = registro && registro.valores[1] ? registro.valores[1] : email.split("@")[0];
+  return { email: email, nome: nome };
 }
 
 function hashToken_(token) {
@@ -39,27 +67,28 @@ function hashToken_(token) {
   return Utilities.base64EncodeWebSafe(bytes).replace(/=+$/g, "");
 }
 
-function emailsAdministradores_() {
-  return String(PropertiesService.getScriptProperties().getProperty(JL_CONFIG.PROPERTIES.ADMIN_EMAILS) || "")
-    .split(/[;,\n]+/).map(normalizarEmail_).filter(Boolean);
-}
-
 function perfilUsuario_(identidade) {
   const email = normalizarEmail_(identidade.email);
   if (emailsAdministradores_().includes(email)) return JL_CONFIG.ROLES.ADMIN;
-  const planilha = abrirPlanilha_();
-  const aba = planilha.getSheetByName(JL_CONFIG.USERS_SHEET);
-  if (!aba || aba.getLastRow() < 2) return JL_CONFIG.ROLES.VIEWER;
-  const linhas = aba.getRange(2, 1, aba.getLastRow() - 1, 4).getDisplayValues();
-  const registro = linhas.find(linha => {
-    const ativo = String(linha[3] || "").trim().toUpperCase();
-    return normalizarEmail_(linha[0]) === email && ["TRUE", "VERDADEIRO", "SIM", "1"].includes(ativo);
-  });
-  if (!registro) return JL_CONFIG.ROLES.VIEWER;
-  const perfil = String(registro[2] || "").trim().toUpperCase();
+  const registro = registroUsuario_(email);
+  if (!registro || !valorAtivo_(registro.valores[3])) return JL_CONFIG.ROLES.VIEWER;
+  const perfil = String(registro.valores[2] || "").trim().toUpperCase();
   return perfil === JL_CONFIG.ROLES.ADMIN ? JL_CONFIG.ROLES.ADMIN
     : perfil === JL_CONFIG.ROLES.MANAGER ? JL_CONFIG.ROLES.MANAGER
     : JL_CONFIG.ROLES.VIEWER;
+}
+
+function registrarUltimoAcesso_(usuario) {
+  const aba = abrirPlanilha_().getSheetByName(JL_CONFIG.USERS_SHEET);
+  if (!aba) return;
+  const registro = registroUsuario_(usuario.email);
+  if (registro) {
+    aba.getRange(registro.linha, 5).setValue(new Date());
+    return;
+  }
+  if (emailsPermitidos_().includes(usuario.email) || emailsAdministradores_().includes(usuario.email)) {
+    aba.appendRow([usuario.email, usuario.nome, usuario.perfil, true, new Date()]);
+  }
 }
 
 function criarSessao_(identidade) {
@@ -70,6 +99,7 @@ function criarSessao_(identidade) {
     perfil: perfilUsuario_(identidade),
     emitidaEm: new Date().toISOString()
   };
+  registrarUltimoAcesso_(sessao);
   CacheService.getScriptCache().put("sessao:" + hashToken_(token), JSON.stringify(sessao), JL_CONFIG.SESSION_SECONDS);
   return { token: token, usuario: sessao, expiresIn: JL_CONFIG.SESSION_SECONDS };
 }
@@ -80,14 +110,20 @@ function exigirSessao_(token, perfisPermitidos) {
   if (!bruto) throw new Error("Sessão ausente ou expirada. Entre novamente.");
   const sessao = JSON.parse(bruto);
   const email = normalizarEmail_(sessao.email);
-  if (!email.endsWith("@" + dominioInstitucional_()) || !emailsPermitidos_().includes(email)) {
+  if (!email.endsWith("@" + dominioInstitucional_()) || !emailAutorizado_(email)) {
     CacheService.getScriptCache().remove(chave);
     throw new Error("Sessão inválida ou acesso revogado.");
   }
-  if (perfisPermitidos && !perfisPermitidos.includes(sessao.perfil)) throw new Error("Seu perfil não autoriza esta operação.");
+  const perfilAtual = perfilUsuario_({ email: email });
+  sessao.perfil = perfilAtual;
+  if (perfisPermitidos && !perfisPermitidos.includes(perfilAtual)) throw new Error("Seu perfil não autoriza esta operação.");
   return sessao;
 }
 
 function podeGerenciar_(usuario) {
   return usuario.perfil === JL_CONFIG.ROLES.MANAGER || usuario.perfil === JL_CONFIG.ROLES.ADMIN;
+}
+
+function podeAdministrar_(usuario) {
+  return usuario.perfil === JL_CONFIG.ROLES.ADMIN;
 }

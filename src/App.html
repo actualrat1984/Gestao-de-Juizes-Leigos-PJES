@@ -1,180 +1,72 @@
 <script>
-const state={token:sessionStorage.getItem('jl_session')||'',data:null,config:null};
+const state={token:sessionStorage.getItem('jl_session')||'',data:null,config:null,currentRequest:null,users:null,tourStep:0};
 const $=id=>document.getElementById(id);
 
-function server(name,...args){
-  return new Promise((resolve,reject)=>{
-    let settled=false;
-    const timer=setTimeout(()=>{
-      if(!settled){
-        settled=true;
-        reject(new Error('O Apps Script não respondeu em 15 segundos. Verifique a implantação e as permissões do navegador.'));
-      }
-    },15000);
-    const ok=value=>{if(settled)return;settled=true;clearTimeout(timer);resolve(value);};
-    const fail=error=>{if(settled)return;settled=true;clearTimeout(timer);reject(new Error(error&&error.message||String(error)));};
-    try{google.script.run.withSuccessHandler(ok).withFailureHandler(fail)[name](...args);}catch(error){fail(error);}
-  });
-}
-
+function server(name,...args){return new Promise((resolve,reject)=>{let settled=false;const timer=setTimeout(()=>{if(!settled){settled=true;reject(new Error('O Apps Script não respondeu em 20 segundos. Verifique a implantação e as permissões do navegador.'));}},20000);const ok=value=>{if(settled)return;settled=true;clearTimeout(timer);resolve(value);};const fail=error=>{if(settled)return;settled=true;clearTimeout(timer);reject(new Error(error&&error.message||String(error)));};try{google.script.run.withSuccessHandler(ok).withFailureHandler(fail)[name](...args);}catch(error){fail(error);}});}
 function esc(value){const d=document.createElement('div');d.textContent=value==null?'':String(value);return d.innerHTML;}
-function toast(message){$('toast').textContent=message;$('toast').hidden=false;setTimeout(()=>$('toast').hidden=true,3000);}
+function safeText(value){const text=String(value==null?'':value);if(!text)return '—';return esc(text).replace(/https?:\/\/[^\s<]+/g,url=>`<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`).replace(/\n/g,'<br>');}
+function toast(message,type='success'){const el=$('toast');el.textContent=message;el.className='toast '+type;el.hidden=false;setTimeout(()=>el.hidden=true,4200);}
+function formatDate(value,withTime=false){if(!value)return '—';const raw=/^\d{4}-\d{2}-\d{2}$/.test(value)?value+'T12:00:00':value;const date=new Date(raw);if(isNaN(date.getTime()))return String(value);return new Intl.DateTimeFormat('pt-BR',withTime?{dateStyle:'short',timeStyle:'short'}:{dateStyle:'short'}).format(date);}
+function statusClass(status){return 'status-'+String(status||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,'-');}
+function priorityClass(priority){return 'priority-'+String(priority||'normal').toLowerCase();}
 function showLogin(message=''){$('loading').hidden=true;$('app').hidden=true;$('login').hidden=false;$('loginError').textContent=message;}
 
-function statusClass(status){
-  const normalized=String(status||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,'-');
-  return 'status-'+normalized;
-}
+async function boot(){$('loading').hidden=false;$('login').hidden=true;$('app').hidden=true;try{state.config=await server('apiConfiguracaoPublica');if(state.token){try{return await loadData();}catch(error){sessionStorage.removeItem('jl_session');state.token='';}}$('loginError').textContent='Identificando sua conta institucional…';const result=await server('apiLogin');state.token=result.token;sessionStorage.setItem('jl_session',state.token);await loadData();}catch(error){showLogin(error.message||'Não foi possível identificar a conta institucional.');}}
 
-async function boot(){
-  $('loading').hidden=false;
-  $('login').hidden=true;
-  $('app').hidden=true;
-  try{
-    state.config=await server('apiConfiguracaoPublica');
-    if(state.token){
-      try{return await loadData();}
-      catch(error){sessionStorage.removeItem('jl_session');state.token='';}
-    }
-    $('loginError').textContent='Identificando sua conta institucional…';
-    const result=await server('apiLogin');
-    state.token=result.token;
-    sessionStorage.setItem('jl_session',state.token);
-    await loadData();
-  }catch(error){showLogin(error.message||'Não foi possível identificar a conta institucional.');}
-}
+async function loadData(){try{$('loading').hidden=false;state.data=await server('apiBootstrap',state.token);render();$('login').hidden=true;$('app').hidden=false;$('loading').hidden=true;if(!localStorage.getItem('jl_tour_done'))setTimeout(startTour,500);}catch(error){$('loading').hidden=true;if(/Sessão|acesso revogado/.test(error.message))return showLogin(error.message);toast(error.message,'error');throw error;}}
 
-async function loadData(){
-  try{
-    $('loading').hidden=false;
-    state.data=await server('apiBootstrap',state.token);
-    render();
-    $('login').hidden=true;
-    $('app').hidden=false;
-    $('loading').hidden=true;
-  }catch(error){
-    $('loading').hidden=true;
-    if(/Sessão|acesso revogado/.test(error.message))return showLogin(error.message);
-    toast(error.message);
-    throw error;
-  }
-}
+function render(){const d=state.data;$('userName').textContent=d.usuario.nome||'Usuário';$('userEmail').textContent=d.usuario.email||'';$('userRole').textContent=d.usuario.perfil;$('scopeText').textContent=d.permissoes.gerenciar?'Você visualiza todas as solicitações e pode realizar designações e atualizações.':'Você possui acesso de consulta e visualiza somente solicitações vinculadas ao seu e-mail.';$('lastUpdated').textContent='Dados atualizados em '+formatDate(d.atualizadoEm,true);$('managementNotice').hidden=!d.permissoes.gerenciar;$('adminTab').hidden=!d.permissoes.administrar;renderMetrics();renderAlerts();fillFilters();renderRequests();renderJudges();}
 
-function render(){
-  const d=state.data;
-  $('userName').textContent=d.usuario.nome||'Usuário';
-  $('userEmail').textContent=d.usuario.email||'';
-  $('userRole').textContent=d.usuario.perfil;
-  $('scopeText').textContent=d.permissoes.gerenciar
-    ?'Você visualiza todas as solicitações e pode realizar designações e atualizações.'
-    :'Você possui acesso de consulta e visualiza somente as solicitações vinculadas ao seu e-mail.';
-  $('managementNotice').hidden=!d.permissoes.gerenciar;
+function renderMetrics(){const m=state.data.metricas;const metrics=[['Total',m.total,'Solicitações visíveis'],['Pendentes',m.pendentes,'Aguardando início'],['Em atendimento',m.emAtendimento,'Em execução'],['Concluídas',m.concluidas,'Finalizadas'],['Sem juiz',m.semJuiz,'Precisam de designação'],['Atrasadas',m.atrasadas,'Prazo vencido'],['Há 7+ dias',m.antigas,'Demandas antigas'],['Juízes disponíveis',m.disponiveis,'Abaixo da capacidade']];$('metrics').innerHTML=metrics.map(([label,value,description])=>`<article class="metric"><strong>${value}</strong><span>${label}</span><small>${description}</small></article>`).join('');}
+function renderAlerts(){const m=state.data.metricas;const alerts=[];if(m.atrasadas)alerts.push(`<button type="button" class="alert danger" onclick="applyQuickFilter('overdue')"><strong>${m.atrasadas} atrasada(s)</strong><span>Ver prazos vencidos</span></button>`);if(m.semJuiz)alerts.push(`<button type="button" class="alert warning" onclick="applyQuickFilter('unassigned')"><strong>${m.semJuiz} sem juiz</strong><span>Ver solicitações</span></button>`);if(m.antigas)alerts.push(`<button type="button" class="alert info" onclick="applyQuickFilter('old')"><strong>${m.antigas} antiga(s)</strong><span>Há pelo menos 7 dias</span></button>`);$('operationalAlerts').innerHTML=alerts.join('');$('operationalAlerts').hidden=!alerts.length;}
 
-  const metrics=[
-    ['Total',d.metricas.total,'Solicitações visíveis'],
-    ['Pendentes',d.metricas.pendentes,'Aguardando início'],
-    ['Em atendimento',d.metricas.emAtendimento,'Em andamento'],
-    ['Juízes disponíveis',d.metricas.disponiveis,'Registros ativos']
-  ];
-  $('metrics').innerHTML=metrics.map(([label,value,description])=>`<div class="metric"><strong>${value}</strong><span>${label}</span><small>${description}</small></div>`).join('');
-  $('statusFilter').innerHTML='<option value="">Todos os status</option>'+d.statusPermitidos.map(x=>`<option>${esc(x)}</option>`).join('');
-  $('editStatus').innerHTML=d.statusPermitidos.map(x=>`<option>${esc(x)}</option>`).join('');
-  $('editJudge').innerHTML='<option value="">Selecione uma pessoa</option>'+d.juizes.map(x=>`<option>${esc(x.nome)}</option>`).join('');
-  $('assignButton').hidden=!d.permissoes.gerenciar;
-  $('saveButton').hidden=!d.permissoes.gerenciar;
-  renderRequests();
-  renderJudges();
-}
+function uniqueValues(key){return [...new Set(state.data.solicitacoes.map(item=>String(item[key]||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));}
+function setOptions(id,values,first){const current=$(id).value;$(id).innerHTML=`<option value="">${first}</option>`+values.map(value=>`<option>${esc(value)}</option>`).join('');if(values.includes(current))$(id).value=current;}
+function fillFilters(){setOptions('statusFilter',state.data.statusPermitidos,'Todos');setOptions('priorityFilter',state.data.prioridadesPermitidas,'Todas');setOptions('judgeFilter',uniqueValues('juiz'),'Todos');setOptions('unitFilter',uniqueValues('unidade'),'Todas');$('editStatus').innerHTML=state.data.statusPermitidos.map(x=>`<option>${esc(x)}</option>`).join('');$('editPriority').innerHTML=state.data.prioridadesPermitidas.map(x=>`<option>${esc(x)}</option>`).join('');$('editJudge').innerHTML='<option value="">Selecione uma pessoa</option>'+state.data.juizes.map(j=>`<option>${esc(j.nome)}</option>`).join('');}
 
-function requestExtra(r){
-  if(!r.detalhes)return '';
-  const d=r.detalhes;
-  return `<details class="request-extra"><summary>Ver informações complementares</summary><div class="details extra-details"><div><small>E-mail</small>${esc(d.email||'—')}</div><div><small>Telefone</small>${esc(d.telefone||'—')}</div><div><small>Processos</small>${esc(d.processos||'—')}</div><div><small>Orientações</small>${esc(d.orientacoes||'—')}</div><div><small>Produtividade</small>${esc(d.produtividade||'—')}</div><div><small>Preferência indicada</small>${esc(r.preferencia||'—')}</div></div></details>`;
-}
+function filteredRequests(){const term=$('search').value.trim().toLowerCase();const status=$('statusFilter').value;const priority=$('priorityFilter').value;const judge=$('judgeFilter').value;const unit=$('unitFilter').value;const flag=$('flagFilter').value;const rows=state.data.solicitacoes.filter(r=>(!term||JSON.stringify(r).toLowerCase().includes(term))&&(!status||r.status===status)&&(!priority||r.prioridade===priority)&&(!judge||r.juiz===judge)&&(!unit||r.unidade===unit)&&(!flag||(flag==='unassigned'&&!r.juiz&&!['Concluído','Cancelado'].includes(r.status))||(flag==='overdue'&&r.atrasada)||(flag==='old'&&r.diasEspera>=7&&!['Concluído','Cancelado'].includes(r.status))));const order=$('sortFilter').value;const priorityOrder={Urgente:0,Alta:1,Normal:2};return rows.sort((a,b)=>{if(order==='oldest')return a.id-b.id;if(order==='newest')return b.id-a.id;if(order==='deadline')return (a.prazo||'9999-12-31').localeCompare(b.prazo||'9999-12-31');if(a.atrasada!==b.atrasada)return a.atrasada?-1:1;return priorityOrder[a.prioridade]-priorityOrder[b.prioridade]||b.id-a.id;});}
 
-function renderRequests(){
-  const term=$('search').value.toLowerCase();
-  const status=$('statusFilter').value;
-  const rows=state.data.solicitacoes.filter(r=>(!status||r.status===status)&&JSON.stringify(r).toLowerCase().includes(term));
-  $('requests').innerHTML=rows.length?rows.map(r=>`
-    <article class="request-card">
-      <div class="request-head">
-        <div><p class="record-label">Solicitação #${r.id}</p><h3>${esc(r.unidade||'Unidade não informada')}</h3><div class="meta">Enviada por ${esc(r.solicitante||'Solicitante não informado')}${r.data?' · '+esc(r.data):''}</div></div>
-        <span class="badge ${statusClass(r.status)}">${esc(r.status)}</span>
-      </div>
-      <div class="details">
-        <div><small>Quantidade solicitada</small><strong>${esc(r.quantidade||'—')}</strong></div>
-        <div><small>Responsável designado</small><strong>${esc(r.juiz||'Ainda não designado')}</strong></div>
-        <div><small>Competências ou matérias</small>${esc(r.competencias||'Não informadas')}</div>
-      </div>
-      ${requestExtra(r)}
-      ${state.data.permissoes.gerenciar?`<div class="card-actions"><button type="button" onclick="openEdit(${r.id})">Abrir gestão</button></div>`:''}
-    </article>`).join(''):'<div class="empty"><strong>Nenhuma solicitação encontrada.</strong><span>Tente remover os filtros ou pesquisar outro termo.</span></div>';
-}
+function requestTags(r){const tags=[`<span class="badge ${statusClass(r.status)}">${esc(r.status)}</span>`,`<span class="priority ${priorityClass(r.prioridade)}">${esc(r.prioridade)}</span>`];if(r.atrasada)tags.push('<span class="priority overdue">Prazo vencido</span>');return tags.join('');}
+function renderRequests(){const rows=filteredRequests();$('resultCount').textContent=rows.length+' de '+state.data.solicitacoes.length+' solicitação(ões)';$('requests').innerHTML=rows.length?rows.map(r=>`<article class="request-card ${r.atrasada?'is-overdue':''}"><div class="request-head"><div><p class="record-label">Solicitação #${r.id}</p><h3>${esc(r.unidade||'Unidade não informada')}</h3><div class="meta">${esc(r.solicitante||'Solicitante não informado')} ${r.data?'· '+esc(r.data):''}</div></div><div class="tag-row">${requestTags(r)}</div></div><div class="details"><div><small>Quantidade</small><strong>${esc(r.quantidade||'—')}</strong></div><div><small>Juiz designado</small><strong>${esc(r.juiz||'Ainda não designado')}</strong></div><div><small>Prazo</small><strong>${formatDate(r.prazo)}</strong></div><div><small>Tempo em espera</small>${r.diasEspera} dia(s)</div><div><small>Competências</small>${esc(r.competencias||'Não informadas')}</div><div><small>Última gestão</small>${r.atualizadoEm?formatDate(r.atualizadoEm,true):'—'}</div></div><div class="card-actions"><button class="secondary" type="button" onclick="openDetails(${r.id})">Ver detalhes</button>${state.data.permissoes.gerenciar?`<button type="button" onclick="openEdit(${r.id})">Gerenciar</button>`:''}</div></article>`).join(''):'<div class="empty"><strong>Nenhuma solicitação encontrada.</strong><span>Remova algum filtro ou pesquise outro termo.</span></div>';}
 
-function renderJudges(){
-  const rows=state.data.juizes;
-  $('judges').innerHTML=rows.length?rows.map(j=>`
-    <article class="judge-card">
-      <div class="request-head"><div><p class="record-label">Disponibilidade #${j.id}</p><h3>${esc(j.nome||'Nome não informado')}</h3></div><span class="badge">Capacidade: ${esc(j.capacidade||'—')}</span></div>
-      <div class="details"><div><small>Matérias</small>${esc(j.materias||'Não informadas')}</div><div><small>Observações</small>${esc(j.observacoes||'Nenhuma')}</div>${j.contato?`<div><small>Contato</small>${esc(j.contato.email||'—')}<br>${esc(j.contato.telefone||'')}</div>`:''}</div>
-    </article>`).join(''):'<div class="empty"><strong>Nenhum juiz disponível no momento.</strong><span>Confira os registros e status na planilha vinculada.</span></div>';
-}
+function renderJudges(){const rows=state.data.juizes;$('judges').innerHTML=rows.length?rows.map(j=>{const cap=j.capacidadeNumerica>0?`${j.designadas} de ${j.capacidadeNumerica} minutas`:`${j.designadas} designada(s) · capacidade não numérica`;return `<article class="judge-card ${j.lotado?'is-full':''}"><div class="request-head"><div><p class="record-label">Disponibilidade #${j.id}</p><h3>${esc(j.nome||'Nome não informado')}</h3></div><span class="badge ${j.lotado?'status-cancelado':'status-concluido'}">${j.lotado?'Capacidade atingida':'Disponível'}</span></div><div class="capacity-line"><div><strong>${cap}</strong><span>${j.disponiveis===null?'Informe uma capacidade numérica':j.disponiveis+' minutas livres'}</span></div><strong>${j.percentualOcupacao}%</strong></div><div class="progress"><span style="width:${j.percentualOcupacao}%"></span></div><div class="details"><div><small>Matérias</small>${esc(j.materias||'Não informadas')}</div><div><small>Observações</small>${esc(j.observacoes||'Nenhuma')}</div>${j.contato?`<div><small>Contato</small><a href="mailto:${esc(j.contato.email||'')}">${esc(j.contato.email||'—')}</a><br>${esc(j.contato.telefone||'')}</div>`:''}</div></article>`;}).join(''):'<div class="empty"><strong>Nenhum juiz disponível.</strong><span>Confira os registros e status na planilha vinculada.</span></div>';}
 
-function openEdit(id){
-  const r=state.data.solicitacoes.find(x=>x.id===id);
-  if(!r)return toast('Solicitação não encontrada. Atualize os dados e tente novamente.');
-  $('editId').value=id;
-  $('editRequestRef').textContent='#'+id;
-  $('editRequestSummary').textContent=(r.unidade||'Unidade não informada')+' · '+(r.solicitante||'Solicitante não informado');
-  if(r.juiz&&!Array.from($('editJudge').options).some(option=>option.value===r.juiz)){
-    $('editJudge').add(new Option(r.juiz,r.juiz));
-  }
-  $('editJudge').value=r.juiz||'';
-  $('editStatus').value=r.status;
-  $('editNotes').value=r.observacoes||'';
-  $('editError').textContent='';
-  $('editDialog').showModal();
-}
+function detailItem(label,value,wide=false){return `<div class="detail-item ${wide?'wide':''}"><small>${label}</small><div>${safeText(value)}</div></div>`;}
+async function openDetails(id){const r=state.data.solicitacoes.find(x=>x.id===id);if(!r)return toast('Solicitação não encontrada.','error');state.currentRequest=r;$('detailRef').textContent='#'+id;$('detailTitle').textContent=r.unidade||'Unidade não informada';$('detailStatusRow').innerHTML=requestTags(r);const d=r.detalhes||{};$('detailGrid').innerHTML=[detailItem('Solicitante',r.solicitante),detailItem('E-mail',d.email||r.email),detailItem('Telefone',d.telefone),detailItem('Data da solicitação',r.data),detailItem('Quantidade',r.quantidade),detailItem('Juiz designado',r.juiz||'Não designado'),detailItem('Data da designação',r.dataDesignacao),detailItem('Prioridade',r.prioridade),detailItem('Prazo',formatDate(r.prazo)),detailItem('Competências',r.competencias,true),detailItem('Processos',d.processos,true),detailItem('Orientações e links',d.orientacoes,true),detailItem('Preferência indicada',r.preferencia,true),detailItem('Produtividade',d.produtividade,true),detailItem('Observações do atendimento',r.observacoes,true)].join('');$('detailsManageButton').hidden=!state.data.permissoes.gerenciar;$('detailsManageButton').onclick=()=>{ $('detailsDialog').close();openEdit(id);};$('historyList').innerHTML='<div class="empty compact-empty">Carregando histórico…</div>';$('detailsDialog').showModal();try{renderHistory(await server('apiHistoricoSolicitacao',state.token,id));}catch(error){$('historyList').innerHTML=`<div class="error">${esc(error.message)}</div>`;}}
 
-async function busy(button,fn){
-  button.disabled=true;
-  $('editError').textContent='';
-  try{await fn();}catch(error){$('editError').textContent=error.message;}finally{button.disabled=false;}
-}
+function actionLabel(action){return ({DESIGNAR_JUIZ:'Juiz designado',REDESIGNAR_JUIZ:'Juiz substituído',ATUALIZAR_SOLICITACAO:'Andamento atualizado',CRIAR_USUARIO:'Usuário criado',ATUALIZAR_USUARIO:'Usuário atualizado'})[action]||action.replace(/_/g,' ');}
+function changesHtml(item){const keys=[...new Set(Object.keys(item.antes||{}).concat(Object.keys(item.depois||{})))];return keys.filter(key=>JSON.stringify(item.antes[key])!==JSON.stringify(item.depois[key])).map(key=>`<div><small>${esc(key)}</small><span>${esc(item.antes[key]??'—')} → <strong>${esc(item.depois[key]??'—')}</strong></span></div>`).join('');}
+function renderHistory(items){$('historyList').innerHTML=items.length?items.map(item=>`<article class="history-item"><div class="history-dot"></div><div><div class="history-head"><strong>${esc(actionLabel(item.acao))}</strong><time>${formatDate(item.data,true)}</time></div><p>${esc(item.email)} · ${esc(item.perfil)}</p><div class="history-changes">${changesHtml(item)}</div></div></article>`).join(''):'<div class="empty compact-empty">Ainda não existem alterações administrativas para esta solicitação.</div>';}
 
-$('assignButton').onclick=()=>busy($('assignButton'),async()=>{
-  const judge=$('editJudge').value;
-  if(!judge)throw new Error('Selecione uma juíza ou um juiz antes de confirmar.');
-  if(!window.confirm(`Designar ${judge} e mudar o status para “Em atendimento”?`))return;
-  await server('apiDesignarJuiz',state.token,Number($('editId').value),judge);
-  $('editDialog').close();
-  toast('Juiz designado e atendimento iniciado.');
-  await loadData();
-});
+function openEdit(id){const r=state.data.solicitacoes.find(x=>x.id===id);if(!r)return toast('Solicitação não encontrada.','error');state.currentRequest=r;$('editId').value=id;$('editRequestRef').textContent='#'+id;$('editRequestSummary').textContent=(r.unidade||'Unidade não informada')+' · '+(r.solicitante||'Solicitante não informado');if(r.juiz&&!Array.from($('editJudge').options).some(option=>option.value===r.juiz))$('editJudge').add(new Option(r.juiz,r.juiz));$('editJudge').value=r.juiz||'';$('editStatus').value=r.status;$('editNotes').value=r.observacoes||'';$('editPriority').value=r.prioridade||'Normal';$('editDeadline').value=r.prazo||'';$('assignmentReason').value='';$('editError').textContent='';updateAssignmentCapacity();$('editDialog').showModal();}
+function selectedJudge(){return state.data.juizes.find(j=>j.nome===$('editJudge').value);}
+function updateAssignmentCapacity(){const j=selectedJudge(),r=state.currentRequest;if(!j||!r){$('assignmentCapacity').innerHTML='<span>Selecione uma pessoa para visualizar a capacidade.</span>';$('overCapacityFields').hidden=true;return;}const alreadyAssigned=r.juiz===j.nome?r.quantidadeNumerica:0;const projected=j.designadas-alreadyAssigned+r.quantidadeNumerica;const exceeds=j.capacidadeNumerica>0&&projected>j.capacidadeNumerica;$('assignmentCapacity').innerHTML=`<strong>${esc(j.nome)}</strong><span>Carga atual: ${j.designadas}${j.capacidadeNumerica?' de '+j.capacidadeNumerica:''} minutas · Após designação: ${projected}${j.capacidadeNumerica?' de '+j.capacidadeNumerica:''}</span>${exceeds?'<b>Esta designação excede a capacidade declarada.</b>':''}`;$('assignmentCapacity').classList.toggle('danger',exceeds);$('overCapacityFields').hidden=!exceeds;}
+async function busy(button,fn){button.disabled=true;$('editError').textContent='';try{await fn();}catch(error){$('editError').textContent=error.message;}finally{button.disabled=false;}}
+function notificationMessage(base,result){const n=result&&result.notificacao;if(!n||n.enviada)return n&&n.enviada?base+' E-mail enviado.':base;return base+' E-mail não enviado: '+n.motivo+'.';}
 
-$('saveButton').onclick=()=>busy($('saveButton'),async()=>{
-  await server('apiAtualizarSolicitacao',state.token,Number($('editId').value),$('editStatus').value,$('editNotes').value);
-  $('editDialog').close();
-  toast('Status e observações atualizados.');
-  await loadData();
-});
+$('assignButton').onclick=()=>busy($('assignButton'),async()=>{const judge=selectedJudge();if(!judge)throw new Error('Selecione uma juíza ou um juiz antes de confirmar.');const r=state.currentRequest;const alreadyAssigned=r.juiz===judge.nome?r.quantidadeNumerica:0;const exceeds=judge.capacidadeNumerica>0&&judge.designadas-alreadyAssigned+r.quantidadeNumerica>judge.capacidadeNumerica;const reason=$('assignmentReason').value.trim();if(exceeds&&reason.length<5)throw new Error('Informe uma justificativa para exceder a capacidade.');const action=r.juiz&&r.juiz!==judge.nome?'Substituir '+r.juiz+' por '+judge.nome:'Designar '+judge.nome;if(!window.confirm(action+' e mudar o status para “Em atendimento”?'))return;const result=await server('apiDesignarJuiz',state.token,Number($('editId').value),judge.nome,reason,exceeds,$('editPriority').value,$('editDeadline').value);$('editDialog').close();toast(notificationMessage('Designação, prioridade e prazo registrados.',result));await loadData();});
+$('saveButton').onclick=()=>busy($('saveButton'),async()=>{const status=$('editStatus').value,notes=$('editNotes').value.trim(),anterior=state.currentRequest.status;if(['Concluído','Cancelado'].includes(status)&&notes.length<5)throw new Error('Explique nas observações por que a solicitação será concluída ou cancelada.');if(status!==anterior&&['Concluído','Cancelado'].includes(status)&&!window.confirm('Confirmar a alteração do status para “'+status+'”?'))return;if(status!==anterior&&['Concluído','Cancelado'].includes(anterior)&&!['Concluído','Cancelado'].includes(status)&&!window.confirm('Reabrir esta solicitação com o status “'+status+'”?'))return;const result=await server('apiAtualizarSolicitacao',state.token,Number($('editId').value),status,notes,$('editPriority').value,$('editDeadline').value);$('editDialog').close();toast(notificationMessage('Andamento atualizado.',result));await loadData();});
 
-function setActiveTab(tabName){
-  const panels={requests:'requestsPanel',judges:'judgesPanel',tutorial:'tutorialPanel'};
-  if(!panels[tabName])return;
-  document.querySelectorAll('.tab').forEach(button=>button.classList.toggle('active',button.dataset.tab===tabName));
-  Object.entries(panels).forEach(([name,id])=>$(id).hidden=name!==tabName);
-  window.scrollTo({top:0,behavior:'smooth'});
-}
+function applyQuickFilter(flag){setActiveTab('requests');$('flagFilter').value=flag;renderRequests();}
+function clearFilters(){$('search').value='';['statusFilter','priorityFilter','judgeFilter','unitFilter','flagFilter'].forEach(id=>$(id).value='');$('sortFilter').value='priority';renderRequests();}
+function exportRequests(){const rows=filteredRequests();if(!rows.length)return toast('Não existem solicitações para exportar.','error');const headers=['Registro','Data','Solicitante','Unidade','Quantidade','Juiz','Status','Prioridade','Prazo','Dias em espera','Competências','Observações'];const values=rows.map(r=>[r.id,r.data,r.solicitante,r.unidade,r.quantidade,r.juiz,r.status,r.prioridade,r.prazo,r.diasEspera,r.competencias,r.observacoes]);const quote=v=>'"'+String(v??'').replace(/"/g,'""')+'"';const csv='\ufeff'+[headers].concat(values).map(row=>row.map(quote).join(';')).join('\r\n');const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));link.download='solicitacoes-pjes-'+new Date().toISOString().slice(0,10)+'.csv';link.click();URL.revokeObjectURL(link.href);}
 
-async function logout(){
-  try{await server('apiLogout',state.token);}
-  finally{sessionStorage.removeItem('jl_session');state.token='';showLogin();}
-}
+async function loadUsers(){if(!state.data.permissoes.administrar)return;try{$('usersTable').innerHTML='<tr><td colspan="5">Carregando usuários…</td></tr>';state.users=await server('apiListarUsuarios',state.token);renderUsers();}catch(error){$('usersTable').innerHTML=`<tr><td colspan="5" class="error">${esc(error.message)}</td></tr>`;}}
+function renderUsers(){const users=state.users||[];$('usersTable').innerHTML=users.map((u,index)=>`<tr><td><strong>${esc(u.nome)}</strong><small>${esc(u.email)}${u.acessoFixo?' · acesso fixo':''}</small></td><td><span class="role dark">${esc(u.perfil)}</span></td><td><span class="badge ${u.ativo?'status-concluido':'status-cancelado'}">${u.ativo?'Ativo':'Inativo'}</span></td><td>${u.ultimoAcesso?esc(u.ultimoAcesso):'Nunca'}</td><td><button class="secondary small-button" type="button" onclick="openUserDialog(${index})">Editar</button></td></tr>`).join('')||'<tr><td colspan="5">Nenhum usuário cadastrado.</td></tr>';}
+function openUserDialog(index){const user=Number.isInteger(index)&&state.users?state.users[index]:null;$('userDialogTitle').textContent=user?'Editar usuário':'Adicionar usuário';$('userEmailInput').value=user?user.email:'';$('userEmailInput').readOnly=Boolean(user);$('userNameInput').value=user?user.nome:'';$('userRoleInput').value=user?user.perfil:'CONSULTA';$('userActiveInput').checked=user?user.ativo:true;$('userActiveInput').disabled=Boolean(user&&user.acessoFixo);$('userError').textContent='';$('userDialog').showModal();}
+$('saveUserButton').onclick=async()=>{const button=$('saveUserButton');button.disabled=true;$('userError').textContent='';try{await server('apiSalvarUsuario',state.token,{email:$('userEmailInput').value,nome:$('userNameInput').value,perfil:$('userRoleInput').value,ativo:$('userActiveInput').checked});$('userDialog').close();toast('Usuário salvo.');await loadUsers();}catch(error){$('userError').textContent=error.message;}finally{button.disabled=false;}};
 
-$('search').addEventListener('input',renderRequests);
-$('statusFilter').addEventListener('change',renderRequests);
+async function setActiveTab(tabName){const panels={requests:'requestsPanel',judges:'judgesPanel',tutorial:'tutorialPanel',admin:'adminPanel'};if(!panels[tabName]||(tabName==='admin'&&!state.data.permissoes.administrar))return;document.querySelectorAll('.tab').forEach(button=>button.classList.toggle('active',button.dataset.tab===tabName));Object.entries(panels).forEach(([name,id])=>$(id).hidden=name!==tabName);if(tabName==='admin')await loadUsers();window.scrollTo({top:0,behavior:'smooth'});}
+
+const tourSteps=[['Visão geral','Os indicadores mostram volume, pendências, atrasos e solicitações sem juiz. Clique nos alertas para filtrar a fila.'],['Solicitações','Use a busca e os filtros para localizar demandas. “Ver detalhes” abre todas as informações e o histórico.'],['Gestão','Em “Gerenciar”, primeiro defina prioridade e prazo, depois designe um juiz ou atualize o andamento.'],['Capacidade','A aba “Juízes e capacidade” mostra carga utilizada, saldo e alertas de lotação.'],['Ajuda permanente','A aba Tutorial mantém todas as instruções disponíveis. Administradores também possuem a aba Usuários.']];
+function startTour(){state.tourStep=0;renderTourStep();$('tourDialog').showModal();}
+function renderTourStep(){const step=tourSteps[state.tourStep];$('tourCounter').textContent='Etapa '+(state.tourStep+1)+' de '+tourSteps.length;$('tourTitle').textContent=step[0];$('tourText').textContent=step[1];$('tourNextButton').textContent=state.tourStep===tourSteps.length-1?'Concluir':'Próximo';}
+function nextTourStep(){if(state.tourStep>=tourSteps.length-1)return closeTour();state.tourStep++;renderTourStep();}
+function closeTour(){localStorage.setItem('jl_tour_done','1');$('tourDialog').close();}
+
+async function logout(){try{await server('apiLogout',state.token);}finally{sessionStorage.removeItem('jl_session');state.token='';showLogin();}}
+['search','statusFilter','priorityFilter','judgeFilter','unitFilter','flagFilter','sortFilter'].forEach(id=>$(id).addEventListener(id==='search'?'input':'change',renderRequests));
+$('editJudge').addEventListener('change',updateAssignmentCapacity);
 document.querySelectorAll('.tab').forEach(button=>button.onclick=()=>setActiveTab(button.dataset.tab));
 boot();
 </script>

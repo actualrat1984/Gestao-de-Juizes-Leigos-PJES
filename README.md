@@ -1,72 +1,106 @@
 # Gestão de Juízes Leigos — PJES
 
-MVP em Google Apps Script que substitui a camada de interface do AppSheet sem desativar, contornar ou enfraquecer a segurança do AppSheet. O sistema lê e atualiza diretamente a planilha de respostas, exige login Google institucional e mantém auditoria das alterações.
+Aplicativo institucional em Google Apps Script para acompanhar solicitações, disponibilidade e capacidade de juízes leigos. A aplicação lê a planilha de respostas do formulário, mantém dados de gestão em abas auxiliares e registra todas as alterações administrativas.
 
 ## Funcionalidades
 
-- Login automático pela sessão Google Workspace, restrito ao domínio institucional.
-- Visão do próprio solicitante para usuários comuns.
-- Visão geral para gestores e administradores.
-- Fila de solicitações, filtros e indicadores.
-- Lista de juízes leigos disponíveis.
-- Designação de juiz, status e data da designação.
-- Atualização de status e observações.
-- Registro de auditoria com usuário, data, ação, valores anteriores e novos.
-- Nenhuma chave do AppSheet é usada ou exposta no navegador.
+- Autenticação pela sessão Google Workspace e lista privada de contas autorizadas.
+- Perfis `CONSULTA`, `GESTOR` e `ADMIN`.
+- Indicadores e alertas de solicitações atrasadas, antigas ou sem juiz.
+- Busca, filtros avançados, ordenação e exportação CSV.
+- Tela completa de detalhes e histórico de alterações.
+- Prioridade (`Normal`, `Alta`, `Urgente`) e prazo por solicitação.
+- Designação e redesignação de juiz com confirmação.
+- Cálculo de carga, saldo e percentual de ocupação dos juízes.
+- Justificativa obrigatória para exceder capacidade, concluir ou cancelar.
+- Notificações institucionais por e-mail, configuráveis.
+- Administração de usuários dentro do site.
+- Auditoria de designações, atualizações e alterações de usuários.
+- Tutorial e visita guiada no primeiro acesso.
 
-## Arquitetura de segurança
+## Arquitetura e segurança
 
-O Web App deve ser implantado por uma conta do Google Workspace do TJES, para **executar como o proprietário**, com acesso restrito ao domínio. O Apps Script identifica o usuário pela sessão Workspace (`Session.getActiveUser()`), confere o domínio institucional e só então cria uma sessão temporária. Toda função que lê ou altera dados exige essa sessão; operações de escrita exigem perfil `GESTOR` ou `ADMIN`.
+O Web App deve ser implantado por uma conta Google Workspace do TJES para **executar como o proprietário**, com acesso restrito ao domínio. O sistema identifica a conta por `Session.getActiveUser()`, valida o domínio e aplica uma segunda camada de autorização.
 
-Essa arquitetura evita compartilhar a planilha com todos os usuários e não depende do login/licenciamento do AppSheet.
+As respostas originais do formulário permanecem na aba `Respostas ao formulário 1`. Informações adicionais são mantidas em:
 
-## Configuração
+- `USUARIOS`: perfis, situação e último acesso.
+- `AUDITORIA`: alterações com usuário, data, valores anteriores e novos.
+- `GESTAO_SOLICITACOES`: prioridade, prazo e última atualização.
 
-1. Crie um projeto autônomo no Google Apps Script e envie o conteúdo de `src/` (recomendado: `clasp`).
-2. Em **Configurações do projeto > Propriedades do script**, crie:
+Contas definidas em `ALLOWED_EMAILS` ou `ADMIN_EMAILS` são acessos fixos de recuperação e não podem ser desativadas pela interface.
 
-   - `SPREADSHEET_ID`: ID da planilha de respostas.
-   - `ALLOWED_EMAILS`: únicos e-mails autorizados a entrar no sistema, separados por vírgula.
-   - `ADMIN_EMAILS`: e-mails institucionais administradores, separados por vírgula.
-   - `INSTITUTIONAL_DOMAIN`: `tjes.jus.br`.
+## Propriedades do script
 
-   A propriedade antiga `GOOGLE_OAUTH_CLIENT_ID` não é mais necessária e pode ser removida.
+Em **Configurações do projeto → Propriedades do script**, configure:
 
-3. No editor do Apps Script, execute `instalarEstruturasAuxiliares_()` uma vez e autorize o script. O sufixo `_` impede chamada pelo navegador.
-4. Execute `verificarConfiguracao_()` e confirme a mensagem de sucesso.
-5. Implante como **Aplicativo da Web**:
-   - **Executar como:** você (a conta TJES que é proprietária do projeto).
-   - **Quem tem acesso:** qualquer pessoa dentro do domínio TJES.
+| Propriedade | Finalidade | Exemplo |
+|---|---|---|
+| `SPREADSHEET_ID` | ID da planilha de respostas | ID encontrado na URL da planilha |
+| `ALLOWED_EMAILS` | Contas fixas autorizadas, separadas por vírgula | `usuario1@dominio,usuario2@dominio` |
+| `ADMIN_EMAILS` | Administradores fixos, separados por vírgula | `administrador@dominio` |
+| `INSTITUTIONAL_DOMAIN` | Domínio institucional permitido | `tjes.jus.br` |
+| `SEND_NOTIFICATIONS` | Envia e-mails em designações e mudanças de status | `TRUE` ou `FALSE` |
 
-   O acesso `DOMAIN` é importante: com uma conta pessoal como proprietária ou com acesso público, o Google pode não disponibilizar o e-mail do usuário ativo.
+Não publique os valores reais dessas propriedades no GitHub.
 
-## Perfis
+## Instalação e atualização
 
-Somente os e-mails informados em `ALLOWED_EMAILS` conseguem entrar. Essa lista controla o acesso; `ADMIN_EMAILS` e a aba `USUARIOS` controlam o nível de permissão dos usuários autorizados.
+O arquivo `.clasp.json` local deve apontar para o projeto correto:
 
-Os e-mails em `ADMIN_EMAILS` recebem perfil `ADMIN`. A aba `USUARIOS` permite definir outros perfis:
+```json
+{
+  "scriptId": "ID_DO_PROJETO_APPS_SCRIPT",
+  "rootDir": "src"
+}
+```
 
-| EMAIL | NOME | PERFIL | ATIVO |
-|---|---|---|---|
-| servidor@tjes.jus.br | Nome do servidor | GESTOR | TRUE |
-
-Perfis aceitos: `CONSULTA`, `GESTOR` e `ADMIN`.
-
-## Observações importantes
-
-- O projeto espera os 17 cabeçalhos presentes na planilha fornecida, com os textos originais.
-- A aba-fonte é `Respostas ao formulário 1`.
-- Não publique chaves de API, client secrets ou credenciais no GitHub. O Client ID OAuth antigo não é usado por esta versão.
-- Revogue qualquer chave do AppSheet ou token que tenha sido enviado por mensagem.
-- Antes de produção, submeta o sistema à TI/Segurança da Informação do TJES e realize um piloto com dados não sensíveis.
-
-## Implantação com clasp
+Atualize o projeto:
 
 ```bash
-npm install -g @google/clasp
-clasp login
-clasp create --type webapp --title "Gestão de Juízes Leigos — PJES" --rootDir src
+git pull
 clasp push
 ```
 
-O projeto não usa a API do AppSheet. Isso é intencional: a API é adequada para integrações servidor-a-servidor, não para remover autenticação ou licenciamento de usuários finais.
+No editor do Apps Script:
+
+1. Execute `instalarEstruturasAuxiliares_()` e autorize as permissões solicitadas.
+2. Execute `verificarConfiguracao_()` e confirme a mensagem de sucesso.
+3. Acesse **Implantar → Gerenciar implantações → Editar**.
+4. Escolha **Nova versão** e clique em **Implantar**.
+5. Use a URL terminada em `/exec`.
+
+Configuração da implantação:
+
+- **Executar como:** proprietário do projeto.
+- **Quem tem acesso:** usuários do domínio TJES.
+
+Após esta atualização, uma nova autorização será solicitada porque o aplicativo pode usar `MailApp` para notificações. Para manter os e-mails desativados, configure `SEND_NOTIFICATIONS` como `FALSE`; a autorização do escopo ainda pode aparecer devido ao manifesto.
+
+## Perfis
+
+| Perfil | Permissões |
+|---|---|
+| `CONSULTA` | Visualiza somente solicitações vinculadas ao próprio e-mail |
+| `GESTOR` | Visualiza todas as solicitações, designa juízes e atualiza andamento |
+| `ADMIN` | Possui as permissões de gestão e administra usuários |
+
+## Fluxo recomendado
+
+1. Localize uma solicitação e abra os detalhes.
+2. Defina prioridade e prazo.
+3. Consulte a capacidade dos juízes.
+4. Faça a designação; o status muda para `Em atendimento`.
+5. Registre o andamento nas observações.
+6. Marque como `Concluído` ou `Cancelado` com uma justificativa.
+7. Consulte o histórico para verificar todas as alterações.
+
+## Observações
+
+- A capacidade é calculada usando a quantidade de minutas das solicitações ativas designadas pelo nome do juiz.
+- Valores de capacidade e quantidade precisam conter um número para o cálculo automático.
+- Designações acima da capacidade continuam possíveis, mas exigem confirmação e justificativa.
+- Notificações são enviadas apenas para endereços do domínio institucional.
+- O sistema espera os 17 cabeçalhos originais da planilha fornecida.
+- Links permanecem no navegador; nenhuma chave do AppSheet é usada ou exposta.
+- Antes da produção, realize um piloto com dados não sensíveis e submeta o sistema à TI/Segurança da Informação do TJES.
