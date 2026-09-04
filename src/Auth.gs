@@ -2,6 +2,11 @@ function normalizarEmail_(valor) {
   return String(valor || "").trim().toLowerCase();
 }
 
+function emailsPermitidos_() {
+  return propriedadeObrigatoria_(JL_CONFIG.PROPERTIES.ALLOWED_EMAILS)
+    .split(/[;,\n]+/).map(normalizarEmail_).filter(Boolean);
+}
+
 // Em um Web App do Apps Script, a identidade institucional deve vir da
 // sessão do Google Workspace. Isso evita o GIS dentro do iframe sandbox do
 // HtmlService, cuja origem compartilhada não pode ser cadastrada como origem
@@ -22,6 +27,9 @@ function identidadeWorkspace_() {
   }
   if (!email.endsWith("@" + dominio)) {
     throw new Error("Use exclusivamente sua conta institucional @" + dominio + ".");
+  }
+  if (!emailsPermitidos_().includes(email)) {
+    throw new Error("Sua conta institucional não está autorizada a acessar este sistema.");
   }
   return { email: email, nome: email.split("@")[0] };
 }
@@ -71,7 +79,11 @@ function exigirSessao_(token, perfisPermitidos) {
   const bruto = token ? CacheService.getScriptCache().get(chave) : null;
   if (!bruto) throw new Error("Sessão ausente ou expirada. Entre novamente.");
   const sessao = JSON.parse(bruto);
-  if (!normalizarEmail_(sessao.email).endsWith("@" + dominioInstitucional_())) throw new Error("Sessão inválida.");
+  const email = normalizarEmail_(sessao.email);
+  if (!email.endsWith("@" + dominioInstitucional_()) || !emailsPermitidos_().includes(email)) {
+    CacheService.getScriptCache().remove(chave);
+    throw new Error("Sessão inválida ou acesso revogado.");
+  }
   if (perfisPermitidos && !perfisPermitidos.includes(sessao.perfil)) throw new Error("Seu perfil não autoriza esta operação.");
   return sessao;
 }
