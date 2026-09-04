@@ -1,5 +1,12 @@
 function apiConfiguracaoPublica() {
-  return { nome: JL_CONFIG.APP_NAME, oauthClientId: clienteOAuth_(), dominio: dominioInstitucional_() };
+  // A página precisa conseguir carregar mesmo antes de o administrador
+  // cadastrar o OAuth Client ID, para mostrar uma mensagem de configuração
+  // clara em vez de ficar presa em “Carregando”. A validação obrigatória
+  // continua ocorrendo em validarIdTokenGoogle_() no momento do login.
+  const oauthClientId = String(
+    PropertiesService.getScriptProperties().getProperty(JL_CONFIG.PROPERTIES.OAUTH_CLIENT_ID) || ""
+  ).trim();
+  return { nome: JL_CONFIG.APP_NAME, oauthClientId: oauthClientId, dominio: dominioInstitucional_() };
 }
 
 function apiLogin(credential) {
