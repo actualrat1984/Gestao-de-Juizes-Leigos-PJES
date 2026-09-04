@@ -42,4 +42,11 @@ assert.strictEqual(call('ehSolicitacao_(__row, __map)'), true);
 const styles = fs.readFileSync('src/Styles.html', 'utf8');
 assert.match(styles, /\[hidden\]\s*\{\s*display\s*:\s*none\s*!important\s*\}/, 'Elementos com hidden não podem permanecer visíveis');
 
+const indexHtml = fs.readFileSync('src/index.html', 'utf8');
+const appHtml = fs.readFileSync('src/App.html', 'utf8');
+assert.match(indexHtml, /id="tutorialPanel"/, 'A aba de tutorial deve existir');
+assert.match(indexHtml, /Designar juiz e iniciar atendimento/, 'A ação de designação deve explicar seu efeito');
+assert.match(indexHtml, /Salvar status e observações/, 'A atualização deve ter nome explícito');
+assert.match(appHtml, /tutorial:'tutorialPanel'/, 'A navegação deve reconhecer a aba de tutorial');
+
 console.log('Smoke tests passed.');
