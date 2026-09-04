@@ -22,4 +22,7 @@ assert.strictEqual(call('ehJuizLeigo_(__row, __map)'), true);
 context.__row[map[headers.FUNCTION]] = 'Assessora ou Assessor';
 assert.strictEqual(call('ehSolicitacao_(__row, __map)'), true);
 
+const styles = fs.readFileSync('src/Styles.html', 'utf8');
+assert.match(styles, /\[hidden\]\s*\{\s*display\s*:\s*none\s*!important\s*\}/, 'Elementos com hidden não podem permanecer visíveis');
+
 console.log('Smoke tests passed.');
