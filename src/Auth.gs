@@ -2,29 +2,33 @@ function normalizarEmail_(valor) {
   return String(valor || "").trim().toLowerCase();
 }
 
+// Em um Web App do Apps Script, a identidade institucional deve vir da
+// sessão do Google Workspace. Isso evita o GIS dentro do iframe sandbox do
+// HtmlService, cuja origem compartilhada não pode ser cadastrada como origem
+// OAuth JavaScript.
+function identidadeWorkspace_() {
+  let email = "";
+  try {
+    email = normalizarEmail_(Session.getActiveUser().getEmail());
+  } catch (erro) {
+    email = "";
+  }
+  const dominio = dominioInstitucional_();
+  if (!email) {
+    throw new Error(
+      "Não foi possível identificar sua conta Google. Implante o Web App como uma conta @" +
+      dominio + " e escolha acesso somente para usuários do domínio."
+    );
+  }
+  if (!email.endsWith("@" + dominio)) {
+    throw new Error("Use exclusivamente sua conta institucional @" + dominio + ".");
+  }
+  return { email: email, nome: email.split("@")[0] };
+}
+
 function hashToken_(token) {
   const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(token));
   return Utilities.base64EncodeWebSafe(bytes).replace(/=+$/g, "");
-}
-
-function validarIdTokenGoogle_(credential) {
-  if (!credential || String(credential).length > 10000) throw new Error("Credencial Google inválida.");
-  const resposta = UrlFetchApp.fetch(
-    "https://oauth2.googleapis.com/tokeninfo?id_token=" + encodeURIComponent(String(credential)),
-    { muteHttpExceptions: true }
-  );
-  if (resposta.getResponseCode() !== 200) throw new Error("Não foi possível validar a identidade Google.");
-  const payload = JSON.parse(resposta.getContentText());
-  const email = normalizarEmail_(payload.email);
-  const dominio = dominioInstitucional_();
-  const expiraEm = Number(payload.exp || 0) * 1000;
-  if (String(payload.aud || "") !== clienteOAuth_()) throw new Error("Credencial destinada a outro sistema.");
-  if (payload.email_verified !== "true" && payload.email_verified !== true) throw new Error("E-mail Google não verificado.");
-  if (!email.endsWith("@" + dominio) || String(payload.hd || "").toLowerCase() !== dominio) {
-    throw new Error("Use exclusivamente sua conta institucional @" + dominio + ".");
-  }
-  if (expiraEm <= Date.now()) throw new Error("A autenticação expirou. Entre novamente.");
-  return { email: email, nome: String(payload.name || email.split("@")[0]).trim() };
 }
 
 function emailsAdministradores_() {
