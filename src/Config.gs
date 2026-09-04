@@ -1,4 +1,7 @@
-const JL_CONFIG = Object.freeze({
+// `var` é intencional: o Apps Script carrega vários arquivos .gs no mesmo
+// projeto, e uma variável global `var` é mais compatível com projetos criados
+// manualmente no editor, independentemente da ordem dos arquivos.
+var JL_CONFIG = Object.freeze({
   APP_NAME: "Gestão de Juízes Leigos — PJES",
   SOURCE_SHEET: "Respostas ao formulário 1",
   USERS_SHEET: "USUARIOS",
