@@ -40,6 +40,9 @@ function apiAtualizarSolicitacao(token, numeroLinha, status, observacoes) {
 }
 
 function verificarConfiguracao_() {
+  const dominio = dominioInstitucional_();
+  const emailsInvalidos = emailsPermitidos_().filter(email => !email.endsWith("@" + dominio));
+  if (emailsInvalidos.length) throw new Error("ALLOWED_EMAILS contém endereço fora do domínio institucional.");
   const aba = obterFonte_();
   mapaCabecalhos_(aba);
   return "Configuração válida. Aba encontrada: " + aba.getName() + ".";
