@@ -6,13 +6,13 @@
   <?!= include_('Styles'); ?>
 </head>
 <body>
-  <div id="loading" class="loading">Carregando…</div>
+  <div id="loading" class="loading" role="status">Carregando…</div>
   <main id="login" class="login-shell" hidden>
     <section class="login-card">
       <div class="brand-mark">PJES</div>
       <p class="eyebrow">Poder Judiciário do Espírito Santo</p>
       <h1><?= appName ?></h1>
-      <p>Acesso restrito às contas institucionais do Google Workspace do TJES.</p>
+      <p>Acesso restrito às contas institucionais autorizadas do Google Workspace do TJES.</p>
       <p>O sistema identificará automaticamente a conta com a qual você está conectado.</p>
       <button type="button" class="secondary" onclick="boot()">Tentar novamente</button>
       <p id="loginError" class="error" role="alert"></p>
@@ -21,36 +21,142 @@
 
   <div id="app" hidden>
     <header class="topbar">
-      <div><strong>PJES</strong><span>Gestão de Juízes Leigos</span></div>
-      <div class="user-area"><span id="userName"></span><span id="userRole" class="role"></span><button class="link-button" onclick="logout()">Sair</button></div>
+      <div class="brand-title"><strong>PJES</strong><span>Gestão de Juízes Leigos</span></div>
+      <div class="user-area">
+        <div class="user-copy"><strong id="userName"></strong><small id="userEmail"></small></div>
+        <span id="userRole" class="role"></span>
+        <button class="link-button" onclick="logout()">Sair</button>
+      </div>
     </header>
+
     <main class="container">
-      <section class="hero"><div><p class="eyebrow">Painel institucional</p><h1>Solicitações e disponibilidade</h1><p id="scopeText"></p></div><button class="secondary" onclick="loadData()">Atualizar</button></section>
-      <section id="metrics" class="metrics"></section>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Painel institucional</p>
+          <h1>Solicitações e disponibilidade</h1>
+          <p id="scopeText"></p>
+        </div>
+        <div class="hero-actions">
+          <button class="secondary" type="button" onclick="setActiveTab('tutorial')">Como usar</button>
+          <button class="secondary" type="button" onclick="loadData()">Atualizar dados</button>
+        </div>
+      </section>
+
+      <section id="managementNotice" class="notice" hidden>
+        <strong>Você possui acesso de gestão.</strong>
+        Abra uma solicitação para designar um juiz ou atualizar o andamento.
+      </section>
+
+      <section id="metrics" class="metrics" aria-label="Indicadores"></section>
+
       <nav class="tabs" aria-label="Seções">
-        <button class="tab active" data-tab="requests">Solicitações</button>
-        <button class="tab" data-tab="judges">Juízes disponíveis</button>
+        <button class="tab active" type="button" data-tab="requests">Solicitações</button>
+        <button class="tab" type="button" data-tab="judges">Juízes disponíveis</button>
+        <button class="tab" type="button" data-tab="tutorial">Tutorial</button>
       </nav>
-      <section id="requestsPanel">
-        <div class="toolbar"><input id="search" type="search" placeholder="Buscar por unidade, solicitante, juiz ou status"><select id="statusFilter"><option value="">Todos os status</option></select></div>
+
+      <section id="requestsPanel" class="tab-panel">
+        <div class="section-heading">
+          <div><h2>Solicitações</h2><p>Pedidos recebidos pela planilha vinculada ao formulário.</p></div>
+        </div>
+        <div class="toolbar">
+          <label class="sr-only" for="search">Pesquisar solicitações</label>
+          <input id="search" type="search" placeholder="Buscar por unidade, solicitante, juiz ou status">
+          <label class="sr-only" for="statusFilter">Filtrar por status</label>
+          <select id="statusFilter"><option value="">Todos os status</option></select>
+        </div>
         <div id="requests" class="cards"></div>
       </section>
-      <section id="judgesPanel" hidden><div id="judges" class="cards"></div></section>
+
+      <section id="judgesPanel" class="tab-panel" hidden>
+        <div class="section-heading">
+          <div><h2>Juízes disponíveis</h2><p>Pessoas registradas no formulário como juíza leiga ou juiz leigo e que não estão com status concluído.</p></div>
+        </div>
+        <div id="judges" class="cards"></div>
+      </section>
+
+      <section id="tutorialPanel" class="tab-panel tutorial" hidden>
+        <div class="section-heading">
+          <div><p class="eyebrow">Guia rápido</p><h2>Como usar o sistema</h2><p>Siga o fluxo abaixo para atender uma solicitação com segurança.</p></div>
+        </div>
+
+        <div class="tutorial-grid">
+          <article class="tutorial-card">
+            <span class="step-number">1</span>
+            <h3>Encontre a solicitação</h3>
+            <p>Na aba <strong>Solicitações</strong>, use a busca ou o filtro de status. Pedidos novos normalmente aparecem como <strong>Pendente</strong>.</p>
+          </article>
+          <article class="tutorial-card">
+            <span class="step-number">2</span>
+            <h3>Abra a gestão</h3>
+            <p>Clique em <strong>Abrir gestão</strong>. Esse botão aparece somente para os perfis GESTOR e ADMIN.</p>
+          </article>
+          <article class="tutorial-card">
+            <span class="step-number">3</span>
+            <h3>Faça a designação</h3>
+            <p>Escolha o juiz e clique em <strong>Designar juiz e iniciar atendimento</strong>. Isso grava o nome, a data da designação e muda o status para <strong>Em atendimento</strong>.</p>
+          </article>
+          <article class="tutorial-card">
+            <span class="step-number">4</span>
+            <h3>Atualize o andamento</h3>
+            <p>Quando necessário, altere o status e escreva uma observação. Clique em <strong>Salvar status e observações</strong>.</p>
+          </article>
+        </div>
+
+        <section class="help-section">
+          <h3>O que cada status significa</h3>
+          <div class="status-guide">
+            <div><span class="badge status-pendente">Pendente</span><p>Recebida, mas ainda não iniciada.</p></div>
+            <div><span class="badge status-em-atendimento">Em atendimento</span><p>Já foi designada ou está sendo trabalhada.</p></div>
+            <div><span class="badge status-concluido">Concluído</span><p>Atendimento finalizado.</p></div>
+            <div><span class="badge status-cancelado">Cancelado</span><p>Pedido cancelado ou que não será atendido.</p></div>
+          </div>
+        </section>
+
+        <section class="help-section">
+          <h3>Importante</h3>
+          <ul>
+            <li><strong>Designar</strong> e <strong>salvar andamento</strong> são ações diferentes.</li>
+            <li>A designação não envia e-mail automaticamente; ela registra a informação na planilha.</li>
+            <li>Todas as alterações administrativas ficam registradas na aba <strong>AUDITORIA</strong>.</li>
+            <li>O botão <strong>Atualizar dados</strong> relê as informações da planilha.</li>
+          </ul>
+        </section>
+      </section>
     </main>
   </div>
 
   <dialog id="editDialog">
     <form method="dialog" id="editForm">
-      <div class="dialog-head"><h2>Gerenciar solicitação</h2><button value="cancel" class="icon-button" aria-label="Fechar">×</button></div>
+      <div class="dialog-head">
+        <div><p class="eyebrow">Registro <span id="editRequestRef"></span></p><h2>Gerenciar solicitação</h2></div>
+        <button value="cancel" class="icon-button" aria-label="Fechar">×</button>
+      </div>
+      <p id="editRequestSummary" class="dialog-summary"></p>
       <input type="hidden" id="editId">
-      <label>Juíza ou juiz leigo<select id="editJudge"><option value="">Selecione</option></select></label>
-      <button type="button" class="secondary" id="assignButton">Designar selecionado</button>
-      <label>Status<select id="editStatus"></select></label>
-      <label>Observações<textarea id="editNotes" rows="5" maxlength="4000"></textarea></label>
-      <div class="dialog-actions"><button value="cancel" class="secondary">Cancelar</button><button type="button" id="saveButton">Salvar atualização</button></div>
+
+      <section class="dialog-section">
+        <div class="action-heading"><span class="step-number">1</span><div><h3>Designar juiz</h3><p>Escolha quem atenderá esta solicitação.</p></div></div>
+        <label for="editJudge">Juíza ou juiz leigo</label>
+        <select id="editJudge"><option value="">Selecione</option></select>
+        <p class="help-text">Ao confirmar, o sistema registra o juiz e a data da designação e muda o status para “Em atendimento”.</p>
+        <button type="button" id="assignButton">Designar juiz e iniciar atendimento</button>
+      </section>
+
+      <section class="dialog-section">
+        <div class="action-heading"><span class="step-number">2</span><div><h3>Atualizar andamento</h3><p>Use esta ação para alterar somente o status e as observações.</p></div></div>
+        <label for="editStatus">Status</label>
+        <select id="editStatus"></select>
+        <label for="editNotes">Observações</label>
+        <textarea id="editNotes" rows="5" maxlength="4000" placeholder="Ex.: minutas concluídas e encaminhadas à unidade."></textarea>
+        <button type="button" id="saveButton">Salvar status e observações</button>
+      </section>
+
       <p id="editError" class="error" role="alert"></p>
+      <div class="dialog-actions"><button value="cancel" class="secondary">Fechar sem alterar</button></div>
     </form>
   </dialog>
+
   <div id="toast" class="toast" role="status" hidden></div>
   <?!= include_('App'); ?>
 </body>
