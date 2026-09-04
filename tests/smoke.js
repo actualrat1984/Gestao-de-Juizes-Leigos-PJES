@@ -8,6 +8,23 @@ for (const file of ['src/Config.gs', 'src/Data.gs']) {
 }
 
 const call = expression => vm.runInContext(expression, context);
+
+context.PropertiesService = {
+  getScriptProperties: () => ({
+    getProperty: name => name === 'ALLOWED_EMAILS'
+      ? 'primeiro@tjes.jus.br; SEGUNDO@TJES.JUS.BR'
+      : ''
+  })
+};
+context.Session = {
+  getActiveUser: () => ({ getEmail: () => 'primeiro@tjes.jus.br' })
+};
+vm.runInContext(fs.readFileSync('src/Auth.gs', 'utf8'), context, { filename: 'src/Auth.gs' });
+
+assert.strictEqual(call('JSON.stringify(emailsPermitidos_())'), '["primeiro@tjes.jus.br","segundo@tjes.jus.br"]');
+assert.strictEqual(call('identidadeWorkspace_().email'), 'primeiro@tjes.jus.br');
+context.Session.getActiveUser = () => ({ getEmail: () => 'naoautorizado@tjes.jus.br' });
+assert.throws(() => call('identidadeWorkspace_()'), /não está autorizada/);
 assert.strictEqual(call("textoCelulaSeguro_('texto comum')"), 'texto comum');
 assert.strictEqual(call("textoCelulaSeguro_('=IMPORTXML(\"x\")')"), "'=IMPORTXML(\"x\")");
 assert.strictEqual(call("statusNormalizado_('')"), 'Pendente');
