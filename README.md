@@ -32,6 +32,8 @@ Essa arquitetura evita compartilhar a planilha com todos os usuários e não dep
    - `ADMIN_EMAILS`: e-mails institucionais administradores, separados por vírgula.
    - `INSTITUTIONAL_DOMAIN`: `tjes.jus.br`.
 
+   Sem `GOOGLE_OAUTH_CLIENT_ID`, a tela agora exibe uma mensagem explícita de configuração e não permanece indefinidamente em “Carregando”.
+
 5. No editor do Apps Script, execute `instalarEstruturasAuxiliares_()` uma vez e autorize o script. O sufixo `_` impede chamada pelo navegador.
 6. Execute `verificarConfiguracao_()` e confirme a mensagem de sucesso.
 7. Implante como **Aplicativo da Web**, executando como o proprietário. O nível de acesso à URL pode ser amplo porque nenhum dado é retornado sem um token institucional válido; ainda assim, use a opção mais restrita que permita aos servidores do domínio abrir a página.
