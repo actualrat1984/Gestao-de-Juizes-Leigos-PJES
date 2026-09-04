@@ -26,6 +26,7 @@ Essa arquitetura evita compartilhar a planilha com todos os usuários e não dep
 2. Em **Configurações do projeto > Propriedades do script**, crie:
 
    - `SPREADSHEET_ID`: ID da planilha de respostas.
+   - `ALLOWED_EMAILS`: únicos e-mails autorizados a entrar no sistema, separados por vírgula.
    - `ADMIN_EMAILS`: e-mails institucionais administradores, separados por vírgula.
    - `INSTITUTIONAL_DOMAIN`: `tjes.jus.br`.
 
@@ -41,7 +42,9 @@ Essa arquitetura evita compartilhar a planilha com todos os usuários e não dep
 
 ## Perfis
 
-Os e-mails em `ADMIN_EMAILS` recebem perfil `ADMIN`. A aba `USUARIOS` permite cadastrar outros acessos:
+Somente os e-mails informados em `ALLOWED_EMAILS` conseguem entrar. Essa lista controla o acesso; `ADMIN_EMAILS` e a aba `USUARIOS` controlam o nível de permissão dos usuários autorizados.
+
+Os e-mails em `ADMIN_EMAILS` recebem perfil `ADMIN`. A aba `USUARIOS` permite definir outros perfis:
 
 | EMAIL | NOME | PERFIL | ATIVO |
 |---|---|---|---|
