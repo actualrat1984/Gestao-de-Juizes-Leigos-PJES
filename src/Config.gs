@@ -9,7 +9,6 @@ var JL_CONFIG = Object.freeze({
   SESSION_SECONDS: 21600,
   PROPERTIES: Object.freeze({
     SPREADSHEET_ID: "SPREADSHEET_ID",
-    OAUTH_CLIENT_ID: "GOOGLE_OAUTH_CLIENT_ID",
     ADMIN_EMAILS: "ADMIN_EMAILS",
     DOMAIN: "INSTITUTIONAL_DOMAIN"
   }),
@@ -46,8 +45,4 @@ function propriedadeObrigatoria_(nome) {
 function dominioInstitucional_() {
   return String(PropertiesService.getScriptProperties().getProperty(JL_CONFIG.PROPERTIES.DOMAIN) || JL_CONFIG.DEFAULT_DOMAIN)
     .trim().toLowerCase();
-}
-
-function clienteOAuth_() {
-  return propriedadeObrigatoria_(JL_CONFIG.PROPERTIES.OAUTH_CLIENT_ID);
 }
